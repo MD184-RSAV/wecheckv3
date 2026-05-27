@@ -56,7 +56,7 @@
         <label for="choixMagasin">Magasin référent</label>
         <select id="choixMagasin" onchange="changerMagasin(this.value)">
             <option value="184" selected>Le Havre (184)</option>
-            <option value="999">Magasin Test (002)</option>
+            <option value="002">Magasin Test (999)</option>
         </select>
     </div>
 
@@ -83,10 +83,10 @@
 </div>
 
 <script>
-    // V3 : Configuration décentralisée - Un ID de Google Sheet par magasin
+    // V3 : Configuration décentralisée - URL complète de publication CSV pour chaque magasin (Format 2PACX-...)
     const CONFIG_MAGASINS = {
-        "184": "1VdsWUF00S_kGZ1pngcjDct5hc2ja7wVCsjnKvmaTzlw",
-        "002": "1r-2X_GVYwO-ieb9TuU389vqaEbQYpN1orXo6J1RHh1c"
+        "184": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbrjuN8MZJ4hRIxkZ7pheKBpkw5ef080EBifvesddZtLw7aiVbTm443dN7YgNm-11TUrqGcO3Bti7M/pub?output=csv",
+        "002": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2rgVmy4t4YHOJqe_00FSGE192HY8oTRIzuz1Gc4lXLK_3Oe-HLHDi4K7eQObQ0d0ogaQgCFM88zKp/pub?output=csv"
     };
     
     let dataSav = {};
@@ -115,7 +115,7 @@
         return lines;
     }
 
-    // V3 : Récupération asynchrone dynamique basée sur le magasin sélectionné
+    // V3 : Récupération asynchrone directe via l'URL complète de publication
     async function chargerDonneesMagasin(numeroMagasin) {
         const inputField = document.getElementById('search');
         const statusField = document.getElementById('loadingStatus');
@@ -131,14 +131,12 @@
         statusField.innerText = "Connexion à la base de données...";
         statusField.style.display = 'block';
 
-        const idSheet = CONFIG_MAGASINS[numeroMagasin];
-        if (!idSheet) {
+        const sheetCsvUrl = CONFIG_MAGASINS[numeroMagasin];
+        if (!sheetCsvUrl) {
             statusField.innerText = "❌ Erreur : Magasin non configuré.";
             statusField.style.color = "red";
             return;
         }
-
-        const sheetCsvUrl = `https://docs.google.com/spreadsheets/d/${idSheet}/pub?output=csv`;
         
         try {
             const response = await fetch(sheetCsvUrl);
