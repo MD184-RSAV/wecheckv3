@@ -18,7 +18,6 @@
         h1 { color: #78be20; text-align: center; margin-bottom: 5px; font-size: 26px; }
         .subtitle { text-align: center; color: #666; font-style: italic; font-size: 0.85em; margin-bottom: 20px; }
         
-        /* Style spécifique pour la sélection de magasin V3 */
         .store-selector-container { margin-bottom: 15px; background: #f9f9f9; padding: 12px; border-radius: 10px; border: 1px solid #eee; }
         .store-selector-container label { display: block; font-size: 0.75em; font-weight: bold; text-transform: uppercase; color: #666; margin-bottom: 5px; letter-spacing: 0.5px; }
         select { width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #eee; background: white; font-size: 15px; outline: none; cursor: pointer; transition: 0.3s; }
@@ -30,14 +29,9 @@
         .suggestion-item { padding: 15px; border-bottom: 1px solid #f9f9f9; cursor: pointer; font-size: 15px; }
         .suggestion-item:active { background-color: #f0f0f0; }
         
-        /* Boîte de résultat de base */
         .result-box { display: none; margin-top: 20px; padding: 15px; border-radius: 12px; background: #ffffff; border: 1px solid #e0e0e0; border-left: 6px solid #78be20; transition: 0.3s; }
-        
-        /* Style spécifique si le produit est à détruire (case cochée) */
         .danger-border { border-left: 6px solid #d9534f; background: #fff5f5; }
         .alert-destruction { display: none; background: #d9534f; color: white; text-align: center; font-weight: bold; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9em; text-transform: uppercase; letter-spacing: 0.5px; }
-        
-        /* Style pour l'encadré de la Hotline */
         .hotline-box { display: none; background: #eef2f7; border: 1px dashed #337ab7; padding: 12px; border-radius: 8px; margin-bottom: 15px; color: #1e40af; font-weight: 500; font-size: 0.95em; }
 
         .label { font-weight: bold; color: #333; display: block; margin-top: 12px; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -55,8 +49,7 @@
     <div class="store-selector-container">
         <label for="choixMagasin">Magasin référent</label>
         <select id="choixMagasin" onchange="changerMagasin(this.value)">
-            <option value="184" selected>Le Havre (184)</option>
-            <option value="002">Magasin Test (999)</option>
+            <option value="">Chargement des magasins...</option>
         </select>
     </div>
 
@@ -66,7 +59,6 @@
 
     <div id="result" class="result-box">
         <div id="resAlertDestruction" class="alert-destruction">⚠️ PRODUIT À DÉTRUIRE SUR PLACE (NE PAS EXPÉDIER)</div>
-        
         <div id="resHotlineBox" class="hotline-box">📞 Hotline obligatoire : <span id="resHotline"></span></div>
 
         <span class="label">📍 Mode Opératoire</span>
@@ -83,19 +75,14 @@
 </div>
 
 <script>
-    // V3 : Configuration décentralisée - URL complète de publication CSV pour chaque magasin (Format 2PACX-...)
-    const CONFIG_MAGASINS = {
-        "184": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbrjuN8MZJ4hRIxkZ7pheKBpkw5ef080EBifvesddZtLw7aiVbTm443dN7YgNm-11TUrqGcO3Bti7M/pub?output=csv",
-        "002": "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2rgVmy4t4YHOJqe_00FSGE192HY8oTRIzuz1Gc4lXLK_3Oe-HLHDi4K7eQObQ0d0ogaQgCFM88zKp/pub?output=csv"
-    };
+    // V4 : UN SEUL LIEN POUR TOUS LES GOUVERNER (L'Annuaire National)
+    const annuaireCsvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRSpmXir02kXAMUX2LvbRA58TG_5cf7KWOJKdfFoQ7F_4o6pbNs6b-apBTnKF3tkAD2-fu9JLm08znS/pub?output=csv";
     
+    let CONFIG_MAGASINS = {}; // Se remplira tout seul via l'annuaire
     let dataSav = {};
 
-    // Analyseur de fichier CSV (gère les séparateurs virgules, guillemets et sauts de ligne)
     function parseCSV(text) {
-        let lines = [];
-        let row = [""];
-        let inQuotes = false;
+        let lines = []; let row = [""]; let inQuotes = false;
         for (let i = 0; i < text.length; i++) {
             let c = text[i]; let next = text[i+1];
             if (c === '"') {
@@ -105,35 +92,71 @@
                 row.push('');
             } else if ((c === '\r' || c === '\n') && !inQuotes) {
                 if (c === '\r' && next === '\n') { i++; }
-                lines.push(row);
-                row = [''];
-            } else {
-                row[row.length - 1] += c;
-            }
+                lines.push(row); row = [''];
+            } else { row[row.length - 1] += c; }
         }
         if (row.length > 1 || row[0] !== '') { lines.push(row); }
         return lines;
     }
 
-    // V3 : Récupération asynchrone directe via l'URL complète de publication
+    // Étape A : Charger l'annuaire et construire le menu déroulant au démarrage
+    async function initialiserApplication() {
+        const selectElement = document.getElementById('choixMagasin');
+        try {
+            const response = await fetch(annuaireCsvUrl);
+            if (!response.ok) throw new Error("Impossible de charger l'annuaire national");
+            const rawText = await response.text();
+            const rows = parseCSV(rawText);
+
+            selectElement.innerHTML = ''; // On vide le message de chargement
+            
+            // i = 1 pour sauter la ligne d'en-tête (Magasin, Url)
+            for(let i = 1; i < rows.length; i++) {
+                const columns = rows[i];
+                if (columns.length >= 2 && columns[0].trim() !== "") {
+                    const numMagasin = columns[0].trim();
+                    const urlMagasin = columns[1].trim();
+                    
+                    // On remplit notre dictionnaire en mémoire
+                    CONFIG_MAGASINS[numMagasin] = urlMagasin;
+
+                    // On ajoute dynamiquement l'option dans le menu déroulant HTML
+                    const opt = document.createElement('option');
+                    opt.value = numMagasin;
+                    opt.innerText = `Magasin ${numMagasin}`;
+                    if (numMagasin === "184") opt.selected = true; // Le Havre sélectionné par défaut
+                    selectElement.appendChild(opt);
+                }
+            }
+
+            // Une fois le menu construit, on charge le magasin par défaut (Le Havre)
+            chargerDonneesMagasin("184");
+
+        } catch (error) {
+            console.error(error);
+            document.getElementById('loadingStatus').innerText = "❌ Erreur critique d'initialisation de l'annuaire.";
+            document.getElementById('loadingStatus').style.color = "red";
+        }
+    }
+
+    // Étape B : Charger les marques du magasin sélectionné
     async function chargerDonneesMagasin(numeroMagasin) {
         const inputField = document.getElementById('search');
         const statusField = document.getElementById('loadingStatus');
         const resultBox = document.getElementById('result');
         
-        // Réinitialisation de l'état de recherche et masquage des anciens résultats
         dataSav = {};
         inputField.value = "";
         inputField.disabled = true;
         inputField.placeholder = "Chargement...";
         resultBox.style.display = 'none';
         statusField.style.color = "#666";
-        statusField.innerText = "Connexion à la base de données...";
+        statusField.innerText = `Connexion au magasin ${numeroMagasin}...`;
         statusField.style.display = 'block';
 
         const sheetCsvUrl = CONFIG_MAGASINS[numeroMagasin];
         if (!sheetCsvUrl) {
-            statusField.innerText = "❌ Erreur : Magasin non configuré.";
+            statusField.innerText = "❌ Erreur : Ce magasin n'existe pas dans l'annuaire.";
             statusField.style.color = "red";
             return;
         }
@@ -144,7 +167,6 @@
             const rawText = await response.text();
             const rows = parseCSV(rawText);
             
-            // i = 1 pour sauter la ligne des entêtes (A, B, C, D, E, F)
             for(let i = 1; i < rows.length; i++) {
                 const columns = rows[i];
                 if (columns.length >= 4 && columns[0].trim() !== "") {
@@ -163,14 +185,13 @@
             inputField.disabled = false;
         } catch (error) {
             console.error(error);
-            statusField.innerText = "❌ Erreur de chargement des données. Vérifiez la publication du Sheet.";
+            statusField.innerText = "❌ Erreur de chargement. Vérifiez la publication du Sheet magasin.";
             statusField.style.color = "red";
         }
     }
 
-    // V3 : Gestion du changement de magasin via l'interface
     function changerMagasin(numeroMagasin) {
-        chargerDonneesMagasin(numeroMagasin);
+        if(numeroMagasin) chargerDonneesMagasin(numeroMagasin);
     }
 
     function normaliser(str) { return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim(); }
@@ -223,9 +244,9 @@
         document.getElementById('search').value = nom;
     }
 
-    // V3 : Lancement initial au chargement sur le magasin 184 (Le Havre)
+    // Au chargement, on lance d'abord la lecture de l'annuaire national
     window.onload = () => {
-        chargerDonneesMagasin("184");
+        initialiserApplication();
     };
 </script>
 </body>
